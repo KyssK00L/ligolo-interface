@@ -12,6 +12,33 @@ Options:
 USAGE
 }
 
+ensure_jq() {
+  if command -v jq >/dev/null 2>&1; then
+    return
+  fi
+
+  echo "ℹ️ L'outil 'jq' est requis mais n'est pas installé."
+
+  if ! command -v apt-get >/dev/null 2>&1; then
+    echo "❌ Impossible d'installer automatiquement 'jq' : 'apt-get' introuvable."
+    exit 1
+  fi
+
+  if (( EUID != 0 )); then
+    echo "❌ Exécutez ce script en tant que root pour installer automatiquement 'jq'."
+    exit 1
+  fi
+
+  echo "🔄 Installation de 'jq' via apt-get..."
+  apt-get update
+  apt-get install -y jq
+
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "❌ L'installation de 'jq' a échoué."
+    exit 1
+  fi
+}
+
 GEN_EXAMPLE=0
 CLEAN=0
 INTERFACE_USER="kali"
@@ -62,10 +89,7 @@ if [[ -z "$FILE" || "${FILE##*.}" != "json" || ! -f "$FILE" ]]; then
   exit 1
 fi
 
-command -v jq >/dev/null 2>&1 || {
-  echo "❌ L'outil 'jq' est requis pour lire le fichier JSON."
-  exit 1
-}
+ensure_jq
 
 IFNAME="${FILE##*/}"
 IFNAME="${IFNAME%.*}"
