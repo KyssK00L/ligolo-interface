@@ -1,41 +1,41 @@
 # ligolo-interface
 
-Script utilitaire pour créer une interface TUN dédiée à partir d'un fichier
-JSON décrivant les routes à annoncer à Ligolo. Il permet également de générer
-un exemple de configuration et de supprimer une interface existante.
+Utility script for creating a dedicated TUN interface from a JSON file
+describing the routes to advertise to Ligolo. It can also generate a sample
+configuration and remove an existing interface.
 
-## Prérequis
+## Prerequisites
 
 - bash
-- [jq](https://jqlang.github.io/jq/) pour lire les fichiers JSON
-- Droits root pour manipuler les interfaces réseau
+- [jq](https://jqlang.github.io/jq/) for reading JSON files
+- Root privileges to manage network interfaces
 
-## Utilisation
+## Usage
 
 ```bash
-sudo ./ligolo-interface.sh [options] <fichier>.json
+sudo ./ligolo-interface.sh [options] <file>.json
 ```
 
-Options disponibles :
+Available options:
 
-- `-g`, `--gen-example` : génère un fichier `example_interface.json` prêt à
-  l'emploi.
-- `-c`, `--clean` : supprime l'interface dérivée du nom de fichier JSON.
-- `--user <nom>` : définit le propriétaire UNIX de l'interface TUN (défaut
+- `-g`, `--gen-example`: generates a ready-to-use `example_interface.json`
+  file.
+- `-c`, `--clean`: removes the interface derived from the JSON file name.
+- `--user <name>`: sets the UNIX owner of the TUN interface (defaults to
   `kali`).
 
-Le nom de l'interface créée correspond au nom du fichier JSON sans extension.
-Chaque élément du tableau JSON doit être une route au format CIDR.
+The name of the created interface matches the JSON file name without the
+extension. Each element of the JSON array must be a route in CIDR format.
 
-## Exemple
+## Example
 
 ```bash
-# Génération d'un exemple
+# Generate an example
 ./ligolo-interface.sh --gen-example
 
-# Création d'une interface à partir d'un fichier
+# Create an interface from a file
 sudo ./ligolo-interface.sh routes.json
 
-# Suppression de l'interface créée
+# Remove the created interface
 sudo ./ligolo-interface.sh --clean routes.json
 ```
