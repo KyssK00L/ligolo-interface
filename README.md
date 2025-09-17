@@ -10,6 +10,17 @@ configuration and remove an existing interface.
 - [jq](https://jqlang.github.io/jq/) for reading JSON files
 - Root privileges to manage network interfaces
 
+## Installation
+
+To make the script available system-wide, copy it to a directory that is in
+your `PATH`, such as `/usr/local/bin`:
+
+```bash
+sudo install -m 0755 ligolo-interface.sh /usr/local/bin/ligolo-interface
+```
+
+You can now run the script from anywhere with `ligolo-interface`.
+
 ## Usage
 
 ```bash
