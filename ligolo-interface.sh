@@ -1,41 +1,58 @@
-
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
 usage() {
-  cat <<EOF
-Usage: $0 [ -g | --gen-example ] [ -c | --clean ] <file>.json
+  cat <<'USAGE'
+Usage: $0 [ -g | --gen-example ] [ -c | --clean ] [ --user <name> ] <file>.json
 
 Options:
   -g, --gen-example   Génère un fichier JSON exemple
   -c, --clean         Supprime l'interface nommée d'après le fichier JSON
-EOF
+      --user <name>   Définit l'utilisateur propriétaire de l'interface (défaut: kali)
+USAGE
 }
 
 GEN_EXAMPLE=0
 CLEAN=0
+INTERFACE_USER="kali"
+FILE=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    -g|--gen-example) GEN_EXAMPLE=1; shift ;;
-    -c|--clean) CLEAN=1; shift ;;
+    -g|--gen-example)
+      GEN_EXAMPLE=1
+      shift
+      ;;
+    -c|--clean)
+      CLEAN=1
+      shift
+      ;;
+    --user)
+      [[ $# -ge 2 ]] || { echo "❌ L'option --user requiert un argument."; usage; exit 1; }
+      INTERFACE_USER="$2"
+      shift 2
+      ;;
     -*)
-      echo "Option inconnue : $1"
+      echo "❌ Option inconnue : $1"
       usage
-      exit 1 ;;
+      exit 1
+      ;;
     *)
-      FILE="$1"; shift ;;
+      FILE="$1"
+      shift
+      ;;
   esac
 done
 
 if (( GEN_EXAMPLE )); then
-  cat > subxx.json <<EOF
+  example_file="example_interface.json"
+  cat >"$example_file" <<'JSON'
 [
   "240.0.0.1/32",
   "172.16.95.0/24"
 ]
-EOF
-  echo "✅ Fichier exemple créé : example_interface.json"
+JSON
+  echo "✅ Fichier exemple créé : $example_file"
   exit 0
 fi
 
@@ -45,9 +62,18 @@ if [[ -z "$FILE" || "${FILE##*.}" != "json" || ! -f "$FILE" ]]; then
   exit 1
 fi
 
+command -v jq >/dev/null 2>&1 || {
+  echo "❌ L'outil 'jq' est requis pour lire le fichier JSON."
+  exit 1
+}
+
 IFNAME="${FILE##*/}"
 IFNAME="${IFNAME%.*}"
-USER="kali"
+
+if [[ -z "$IFNAME" ]]; then
+  echo "❌ Impossible de déduire le nom d'interface depuis '$FILE'"
+  exit 1
+fi
 
 (( EUID == 0 )) || { echo "⚠️ Ce script doit être exécuté en root."; exit 2; }
 
@@ -59,111 +85,33 @@ if (( CLEAN )); then
   exit 0
 fi
 
-ROUTES=()
-while IFS= read -r line; do
-  [[ $line =~ \"([0-9./]+)\" ]] && ROUTES+=("${BASH_REMATCH[1]}")
-done < "$FILE"
+mapfile -t ROUTES < <(jq -r '.[]' "$FILE")
+
+if (( ${#ROUTES[@]} == 0 )); then
+  echo "⚠️ Aucune route n'a été trouvée dans '$FILE'."
+fi
 
 if ip link show "$IFNAME" &>/dev/null; then
   echo "ℹ️ L'interface '$IFNAME' existe déjà. Ajout des routes uniquement."
 else
-  echo "🔧 Création de l'interface : $IFNAME (user: $USER)"
-  ip tuntap add dev "$IFNAME" mode tun user "$USER"
+  echo "🔧 Création de l'interface : $IFNAME (user: $INTERFACE_USER)"
+  ip tuntap add dev "$IFNAME" mode tun user "$INTERFACE_USER"
   ip link set dev "$IFNAME" up
   echo "🟢 Interface $IFNAME activée"
 fi
 
 echo "🔀 Ajout des routes :"
 for r in "${ROUTES[@]}"; do
-  ip route add "$r" dev "$IFNAME" 2>/dev/null \
-    && echo "- $r via $IFNAME" \
-    || echo "⚠️ Route '$r' existe ou erreur"
+  [[ -n "$r" ]] || continue
+  if ip route show "$r" 2>/dev/null | grep -q "dev $IFNAME"; then
+    echo "⚠️ Route '$r' déjà associée à $IFNAME"
+    continue
+  fi
+  if ip route add "$r" dev "$IFNAME" 2>/dev/null; then
+    echo "- $r via $IFNAME"
+  else
+    echo "⚠️ Échec lors de l'ajout de la route '$r'"
+  fi
 done
 
 echo "✅ Fin du traitement pour '$IFNAME'."
-
-╭─      ~/Documents ───────────────────────────────────────────────────────── ✔  NORMAL  at 22:02:36   ─╮
-╰─ cat /usr/local/bin/ligolo-interface                                                                           ─╯
-#!/usr/bin/env bash
-set -e
-
-usage() {
-  cat <<EOF
-Usage: $0 [ -g | --gen-example ] [ -c | --clean ] <file>.json
-
-Options:
-  -g, --gen-example   Génère un fichier JSON exemple
-  -c, --clean         Supprime l'interface nommée d'après le fichier JSON
-EOF
-}
-
-GEN_EXAMPLE=0
-CLEAN=0
-
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    -g|--gen-example) GEN_EXAMPLE=1; shift ;;
-    -c|--clean) CLEAN=1; shift ;;
-    -*)
-      echo "Option inconnue : $1"
-      usage
-      exit 1 ;;
-    *)
-      FILE="$1"; shift ;;
-  esac
-done
-
-if (( GEN_EXAMPLE )); then
-  cat > subxx.json <<EOF
-[
-  "240.0.0.1/32",
-  "172.16.95.0/24"
-]
-EOF
-  echo "✅ Fichier exemple créé : example_interface.json"
-  exit 0
-fi
-
-if [[ -z "$FILE" || "${FILE##*.}" != "json" || ! -f "$FILE" ]]; then
-  echo "❌ Spécifiez un fichier .json valide"
-  usage
-  exit 1
-fi
-
-IFNAME="${FILE##*/}"
-IFNAME="${IFNAME%.*}"
-USER="kali"
-
-(( EUID == 0 )) || { echo "⚠️ Ce script doit être exécuté en root."; exit 2; }
-
-if (( CLEAN )); then
-  echo "🧹 Suppression de l'interface : $IFNAME"
-  ip link set dev "$IFNAME" down || true
-  ip link delete dev "$IFNAME" || true
-  echo "✅ Interface $IFNAME supprimée."
-  exit 0
-fi
-
-ROUTES=()
-while IFS= read -r line; do
-  [[ $line =~ \"([0-9./]+)\" ]] && ROUTES+=("${BASH_REMATCH[1]}")
-done < "$FILE"
-
-if ip link show "$IFNAME" &>/dev/null; then
-  echo "ℹ️ L'interface '$IFNAME' existe déjà. Ajout des routes uniquement."
-else
-  echo "🔧 Création de l'interface : $IFNAME (user: $USER)"
-  ip tuntap add dev "$IFNAME" mode tun user "$USER"
-  ip link set dev "$IFNAME" up
-  echo "🟢 Interface $IFNAME activée"
-fi
-
-echo "🔀 Ajout des routes :"
-for r in "${ROUTES[@]}"; do
-  ip route add "$r" dev "$IFNAME" 2>/dev/null \
-    && echo "- $r via $IFNAME" \
-    || echo "⚠️ Route '$r' existe ou erreur"
-done
-
-echo "✅ Fin du traitement pour '$IFNAME'."
-
