@@ -30,8 +30,18 @@ ensure_jq() {
   fi
 
   echo "🔄 Installation de 'jq' via apt-get..."
-  apt-get update
-  apt-get install -y jq
+
+  if ! apt-get update; then
+    echo "❌ Échec de 'apt-get update'. Impossible d'installer automatiquement 'jq'."
+    echo "ℹ️ Installez 'jq' manuellement puis relancez le script."
+    return 1
+  fi
+
+  if ! apt-get install -y jq; then
+    echo "❌ Échec de 'apt-get install'. Impossible d'installer automatiquement 'jq'."
+    echo "ℹ️ Installez 'jq' manuellement puis relancez le script."
+    return 1
+  fi
 
   if ! command -v jq >/dev/null 2>&1; then
     echo "❌ L'installation de 'jq' a échoué."
